@@ -4,10 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=your_username
-WorkingDirectory=/path/to/telegram-file-bot
-Environment="PATH=/path/to/telegram-file-bot/venv/bin"
-ExecStart=/path/to/telegram-file-bot/venv/bin/python http_server.py
+User=root
+WorkingDirectory=/root/telegram-file-bot
+Environment="PATH=/root/telegram-file-bot/venv/bin"
+ExecStart=/root/telegram-file-bot/venv/bin/python http_server.py
 Restart=always
 RestartSec=10
 

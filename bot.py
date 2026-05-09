@@ -149,7 +149,7 @@ class FileDownloader:
         except:
             return False
     
-    def get_file_size(self, url: str, session: aiohttp.ClientSession) -> Optional[int]:
+    async def get_file_size(self, url: str, session: aiohttp.ClientSession) -> Optional[int]:
         """Get file size from URL headers."""
         try:
             async with session.head(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
