@@ -26,9 +26,7 @@ class GitHubSettings(BaseSettings):
     github_branch: str = "main"
     github_api_url: str = "https://api.github.com"
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {"extra": "ignore", "env_file": ".env", "case_sensitive": False}
 
 try:
     github_settings = GitHubSettings()

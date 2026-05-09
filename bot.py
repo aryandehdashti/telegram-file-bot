@@ -83,9 +83,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_file: Optional[str] = None
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {"extra": "ignore", "env_file": ".env", "case_sensitive": False}
 
 # Initialize settings
 try:
