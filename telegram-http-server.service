@@ -1,0 +1,24 @@
+[Unit]
+Description=Telegram File Download Bot HTTP Server
+After=network.target
+
+[Service]
+Type=simple
+User=your_username
+WorkingDirectory=/path/to/telegram-file-bot
+Environment="PATH=/path/to/telegram-file-bot/venv/bin"
+ExecStart=/path/to/telegram-file-bot/venv/bin/python http_server.py
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=telegram-http-server
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
