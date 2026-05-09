@@ -586,6 +586,10 @@ Need help? Contact admin.
     
     async def show_download_options(self, query, file_id: str, filename: str, file_size_mb: float):
         """Show download options for a file."""
+        # Ensure file_storage is initialized
+        if not hasattr(self, 'file_storage'):
+            self.file_storage = {}
+        
         message = f"✅ Download complete!\n\n"
         message += f"📁 File: {filename}\n"
         message += f"📊 Size: {file_size_mb:.2f}MB\n\n"
@@ -625,13 +629,21 @@ Need help? Contact admin.
     async def handle_file(self, update: Update, filepath: Path, file_size_mb: float):
         """Handle downloaded file by offering download options."""
         # Store file info for later use
-        file_id = hashlib.md5(str(datetime.now()).encode()).hexdigest()[:8]
-        self.file_storage = getattr(self, 'file_storage', {})
+        # Use filepath in hash to ensure uniqueness and persistence
+        file_id = hashlib.md5(f"{filepath}_{datetime.now()}".encode()).hexdigest()[:8]
+        
+        # Ensure file_storage is initialized
+        if not hasattr(self, 'file_storage'):
+            self.file_storage = {}
+        
         self.file_storage[file_id] = {
             'filepath': str(filepath),
             'file_size_mb': file_size_mb,
-            'filename': filepath.name
+            'filename': filepath.name,
+            'timestamp': datetime.now().isoformat()
         }
+        
+        logger.info(f"Stored file with ID: {file_id} for file: {filepath.name}")
         
         # Build download options message
         message = f"✅ File downloaded successfully!\n\n"
@@ -964,19 +976,31 @@ Need help? Contact admin.
     
     async def handle_github_callback(self, query, file_id: str):
         """Handle GitHub storage button callback."""
+        logger.info(f"GitHub callback called with file_id: {file_id}")
+        
         if not self.github_storage:
             await query.edit_message_text("❌ GitHub storage not configured")
             return
         
+        if not hasattr(self, 'file_storage'):
+            logger.warning("file_storage not initialized")
+            await query.edit_message_text("❌ File storage not initialized")
+            return
+        
         if file_id not in self.file_storage:
+            logger.warning(f"File ID {file_id} not found in file_storage")
+            logger.info(f"Available file IDs: {list(self.file_storage.keys())}")
             await query.edit_message_text("❌ File not found or expired")
             return
         
         file_info = self.file_storage[file_id]
         filepath = Path(file_info['filepath'])
         
+        logger.info(f"Processing GitHub storage for file: {filepath}")
+        
         if not filepath.exists():
-            await query.edit_message_text("❌ File not found")
+            logger.error(f"File not found at path: {filepath}")
+            await query.edit_message_text("❌ File not found on disk")
             del self.file_storage[file_id]
             return
         
