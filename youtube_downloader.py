@@ -21,6 +21,29 @@ class YouTubeDownloader:
     def __init__(self, temp_download_dir: str = "/tmp/telegram_bot_downloads"):
         self.temp_download_dir = Path(temp_download_dir)
         self.temp_download_dir.mkdir(parents=True, exist_ok=True)
+        self.available = self.check_yt_dlp_available()
+    
+    def check_yt_dlp_available(self) -> bool:
+        """Check if yt-dlp is installed and working."""
+        try:
+            result = subprocess.run(
+                ['yt-dlp', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                logger.info(f"yt-dlp is available: {result.stdout.strip()}")
+                return True
+            else:
+                logger.error(f"yt-dlp check failed: {result.stderr}")
+                return False
+        except FileNotFoundError:
+            logger.error("yt-dlp not found in system PATH")
+            return False
+        except Exception as e:
+            logger.error(f"Error checking yt-dlp: {e}")
+            return False
     
     def is_youtube_url(self, url: str) -> bool:
         """Check if URL is a YouTube URL."""
@@ -38,6 +61,13 @@ class YouTubeDownloader:
     
     def get_video_info(self, url: str) -> Optional[Dict[str, Any]]:
         """Get video information without downloading."""
+        # Check if yt-dlp is available
+        try:
+            subprocess.run(['yt-dlp', '--version'], capture_output=True, check=True, timeout=5)
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            logger.error(f"yt-dlp not available or not working: {e}")
+            return None
+        
         try:
             cmd = [
                 'yt-dlp',

@@ -292,10 +292,16 @@ class TelegramBot:
         
         # Initialize YouTube downloader if available
         self.youtube_downloader = None
+        self.youtube_available = False
         if YOUTUBE_AVAILABLE:
             try:
                 self.youtube_downloader = YouTubeDownloader(settings.temp_download_dir)
-                logger.info("YouTube downloader initialized successfully")
+                if self.youtube_downloader.available:
+                    self.youtube_available = True
+                    logger.info("YouTube downloader initialized successfully")
+                else:
+                    logger.warning("YouTube downloader initialized but yt-dlp not available")
+                    self.youtube_downloader = None
             except Exception as e:
                 logger.warning(f"Failed to initialize YouTube downloader: {e}")
                 self.youtube_downloader = None
@@ -477,6 +483,18 @@ Need help? Contact admin.
     async def handle_youtube_url(self, update: Update, url: str):
         """Handle YouTube URL with quality/format selection."""
         user_id = update.effective_user.id
+        
+        # Check if YouTube downloader is available
+        if not self.youtube_available or not self.youtube_downloader:
+            await update.message.reply_text(
+                "❌ YouTube downloads are not available.\n\n"
+                "This is because yt-dlp is not installed on the VPS.\n\n"
+                "To enable YouTube downloads:\n"
+                "1. SSH into your VPS\n"
+                "2. Run: pip install yt-dlp\n"
+                "3. Restart the bot"
+            )
+            return
         
         # Check rate limit
         if self.downloader.is_rate_limited(user_id):
