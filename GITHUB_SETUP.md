@@ -3,9 +3,9 @@
 ## Step 1: Create the Repository on GitHub
 
 1. Go to https://github.com/new
-2. Repository name: `telegram-file-bot`
-3. Description: `Telegram bot for downloading files in Iran's restricted network environment with multiple download methods`
-4. Make it **Public** (so raw URLs work)
+2. Repository name: `telegram-file-bot` (or your preferred name)
+3. Description: `Telegram bot for downloading files in restricted network environments with multiple download methods`
+4. Make it **Public** (so raw URLs work without authentication)
 5. **Don't** initialize with README, .gitignore, or license (we already have these)
 6. Click "Create repository"
 
@@ -14,10 +14,10 @@
 After creating the repository, GitHub will show you instructions. Run these commands in the telegram-file-bot directory:
 
 ```bash
-cd C:\Users\arian\Documents\source\Projrcts\telegram-file-bot
+cd /path/to/telegram-file-bot
 
-# Add the remote repository
-git remote add origin https://github.com/aryandehdashti/telegram-file-bot.git
+# Add the remote repository (replace YOUR_USERNAME with your GitHub username)
+git remote add origin https://github.com/YOUR_USERNAME/telegram-file-bot.git
 
 # Rename branch to main (if needed)
 git branch -M main

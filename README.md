@@ -11,13 +11,13 @@ A Telegram bot that downloads files from URLs and delivers them to users, design
   - 🐙 **GitHub Storage**: Files stored in GitHub repo with raw URL access (works in Iran!)
   - 🌐 **HTTP Server**: Direct download links from VPS (for very large files)
 - **Smart File Handling**: Automatic file size detection and method recommendation
-- **Network Resilience**: Works around Iran's network restrictions
-- **VPS-based**: Runs on Finland VPS for unrestricted access
-- **GitHub Integration**: Leverages GitHub's accessible raw content delivery for Iran
+- **Network Resilience**: Works around restricted network environments
+- **VPS-based**: Runs on VPS in unrestricted region for full internet access
+- **GitHub Integration**: Leverages GitHub's accessible raw content delivery
 
 ## Architecture
 
-The bot runs on a VPS in Finland (free world) and:
+The bot runs on a VPS in an unrestricted region (free from network censorship) and:
 1. Receives download URLs from users via Telegram
 2. Downloads files from the internet without restrictions
 3. Sends files back via Telegram or provides alternative download links
@@ -29,7 +29,7 @@ The bot runs on a VPS in Finland (free world) and:
 
 - Python 3.8+
 - Telegram Bot Token (from @BotFather)
-- VPS in unrestricted location (Finland)
+- VPS in unrestricted region (any country without internet censorship)
 
 ### Installation
 
@@ -81,24 +81,24 @@ sudo systemctl start telegram-file-bot
 3. **Choose your download method**:
    - 📱 **Telegram Download**: Direct file transfer (fast, files <50MB)
    - 📦 **Telegram Chunks**: Large files split into parts (50-500MB)
-   - 🐙 **GitHub Storage**: File stored in GitHub with raw URL (works in Iran!)
+   - 🐙 **GitHub Storage**: File stored in GitHub with raw URL (works in restricted regions!)
    - 🌐 **HTTP Server**: Direct download link from VPS (for very large files)
-4. **GitHub Method** (Recommended for Iran):
+4. **GitHub Method** (Recommended for restricted networks):
    - File is stored in your GitHub repository
    - You receive a raw GitHub URL
-   - Download directly from GitHub (works in Iran)
+   - Download directly from GitHub (accessible in most regions)
    - No size limits for GitHub repo storage
 
 ## Network Bypassing Methods
 
 ### Current Setup
-- **DNS Tunneling**: Slow but works for Telegram access
-- **GitHub Code Files**: Accessible, releases blocked
-- **VPS in Finland**: Unrestricted internet access
+- **DNS Tunneling**: Slow but works for Telegram access in restricted regions
+- **GitHub Code Files**: Generally accessible, releases may be blocked
+- **VPS in Unrestricted Region**: Full internet access
 
 ### Alternative Methods
-1. **HTTP Relay**: Use existing MasterHttpRelayVPN-RUST for HTTP traffic
-2. **DNS VPN**: Continue using MasterDnsVPN for Telegram access
+1. **HTTP Relay**: Use HTTP relay services for HTTP traffic
+2. **DNS VPN**: Use DNS-based VPN for Telegram access
 3. **GitHub Raw URLs**: Use GitHub as CDN for smaller files
 4. **Direct VPS Download**: Users can download directly from VPS HTTP server
 

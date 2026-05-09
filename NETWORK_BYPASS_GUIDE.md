@@ -1,43 +1,43 @@
-# Network Bypassing Guide for Iran
+# Network Bypassing Guide for Restricted Environments
 
-This guide explains how to use the Telegram File Download Bot in Iran's restricted network environment.
+This guide explains how to use the Telegram File Download Bot in restricted network environments where internet access is limited or censored.
 
 ## Current Situation Analysis
 
-### Network Restrictions in Iran
-- **Telegram**: Filtered but accessible via DNS tunneling (slow)
-- **GitHub**: Code files accessible, releases blocked
+### Network Restrictions in Censored Regions
+- **Telegram**: Often filtered but accessible via DNS tunneling (slow)
+- **GitHub**: Code files usually accessible, releases may be blocked
 - **Direct Downloads**: Many sources blocked or severely throttled
 - **International Services**: Limited access, high latency
 
-### Your Current Setup
-You're already using:
-- **LatestReleaseMirror**: For mirroring GitHub releases
-- **MasterDnsVPN**: DNS tunneling for Telegram access
-- **MasterHttpRelayVPN-RUST**: HTTP relay for web traffic
-- **VPS in Finland**: Unrestricted internet access
+### Common Tools Used
+Users in restricted regions often use:
+- **DNS Tunneling**: For accessing Telegram and other services
+- **HTTP Relays**: For bypassing HTTP traffic filtering
+- **VPN Services**: Various methods to circumvent censorship
+- **VPS in Unrestricted Regions**: For full internet access
 
 ## How This Bot Helps
 
 ### Architecture Overview
 
 ```
-[User in Iran] 
-    ↓ (DNS Tunneling - Slow)
+[User in Restricted Region]
+    ↓ (DNS Tunneling/VPN - May be slow)
 [Telegram Bot]
     ↓ (API Call)
-[VPS in Finland]
-    ↓ (Unrestricted)
+[VPS in Unrestricted Region]
+    ↓ (Full Internet Access)
 [Internet/Download Source]
     ↓ (File Download)
-[VPS in Finland]
+[VPS in Unrestricted Region]
     ↓ (Multiple Methods)
-[User in Iran]
+[User in Restricted Region]
 ```
 
 ### Why This Works
 
-1. **VPS in Free World**: Your Finland VPS has unrestricted internet access
+1. **VPS in Free World**: VPS in unrestricted region has full internet access
 2. **Download on VPS**: Files are downloaded on the VPS, not your local machine
 3. **Telegram Delivery**: Only Telegram messages go through your restricted connection
 4. **Multiple Fallbacks**: If one method fails, others are available
