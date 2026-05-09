@@ -39,6 +39,14 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logger.warning("GitHub fallback module not available")
 
+try:
+    from youtube_downloader import YouTubeDownloader, QUALITY_PRESETS
+    YOUTUBE_AVAILABLE = True
+except ImportError:
+    YOUTUBE_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("YouTube downloader module not available")
+
 # Load environment variables
 load_dotenv()
 
@@ -267,6 +275,9 @@ class TelegramBot:
         # Store file information for download options
         self.file_storage: Dict[str, Dict[str, Any]] = {}
         
+        # Store YouTube download information
+        self.youtube_storage: Dict[str, Dict[str, Any]] = {}
+        
         # Initialize GitHub storage if available
         self.github_storage = None
         if GITHUB_AVAILABLE:
@@ -280,6 +291,16 @@ class TelegramBot:
             except Exception as e:
                 logger.warning(f"Failed to initialize GitHub storage: {e}")
                 self.github_storage = None
+        
+        # Initialize YouTube downloader if available
+        self.youtube_downloader = None
+        if YOUTUBE_AVAILABLE:
+            try:
+                self.youtube_downloader = YouTubeDownloader(settings.temp_download_dir)
+                logger.info("YouTube downloader initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize YouTube downloader: {e}")
+                self.youtube_downloader = None
     
     def setup_handlers(self):
         """Setup bot command and message handlers."""
@@ -302,6 +323,7 @@ Just send me a download URL and I'll handle the rest.
 
 *Features:*
 ✅ Download any file from the internet
+✅ Download YouTube videos with quality selection
 ✅ Handle large files (>50MB) by splitting
 ✅ Alternative download methods for very large files
 ✅ Works around network restrictions
@@ -325,6 +347,11 @@ Send me a URL to get started!
 2. I'll download it on my VPS
 3. I'll send it to you via Telegram
 
+*YouTube Downloads:*
+• Send any YouTube URL
+• Choose quality (1080p, 720p, 480p, 360p, or audio only)
+• Download via Telegram, GitHub, or HTTP
+
 *File size handling:*
 • <50MB: Sent directly via Telegram
 • 50-500MB: Split into chunks
@@ -332,11 +359,12 @@ Send me a URL to get started!
 
 *Example URLs:*
 • Direct downloads: https://example.com/file.zip
+• YouTube: https://youtube.com/watch?v=xxxxx
 • Google Drive: (shareable links)
 • GitHub: (raw file URLs)
 
 *Notes:*
-• Downloads happen on Finland VPS (unrestricted)
+• Downloads happen on VPS in unrestricted region
 • Large files may take time to process
 • Temporary files are cleaned up automatically
 
@@ -346,14 +374,18 @@ Need help? Contact admin.
     
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /status command."""
+        youtube_status = "✅ Available" if self.youtube_downloader else "❌ Not Available"
+        github_status = "✅ Configured" if self.github_storage else "❌ Not Configured"
+        
         status = f"""
 📊 *Bot Status*
 
 ✅ Bot is running
-🌍 VPS Location: Finland
 💾 Temp Dir: {self.settings.temp_download_dir}
 📁 Max File Size: {self.settings.max_file_size_mb}MB
 🔗 HTTP Server: {'Enabled' if self.settings.enable_http_server else 'Disabled'}
+🎬 YouTube Downloads: {youtube_status}
+🐙 GitHub Storage: {github_status}
         """
         await update.message.reply_text(status, parse_mode='Markdown')
     
@@ -389,6 +421,11 @@ Need help? Contact admin.
             await update.message.reply_text(
                 "⚠️ Rate limit exceeded. Please wait before downloading more files."
             )
+            return
+        
+        # Check if YouTube URL
+        if self.youtube_downloader and self.youtube_downloader.is_youtube_url(url):
+            await self.handle_youtube_url(update, url)
             return
         
         # Validate URL
@@ -438,6 +475,154 @@ Need help? Contact admin.
         """Update progress message (async wrapper needed)."""
         # This would need to be called differently in async context
         pass
+    
+    async def handle_youtube_url(self, update: Update, url: str):
+        """Handle YouTube URL with quality/format selection."""
+        user_id = update.effective_user.id
+        
+        # Check rate limit
+        if self.downloader.is_rate_limited(user_id):
+            await update.message.reply_text(
+                "⚠️ Rate limit exceeded. Please wait before downloading more files."
+            )
+            return
+        
+        # Get video info
+        await update.message.reply_text("🎬 Getting video information...")
+        
+        try:
+            # Get video title
+            video_title = self.youtube_downloader.get_video_title(url)
+            
+            if not video_title:
+                await update.message.reply_text("❌ Could not get video information. The video may be private or unavailable.")
+                return
+            
+            # Store YouTube download info
+            youtube_id = hashlib.md5(f"{url}{datetime.now()}".encode()).hexdigest()[:8]
+            self.youtube_storage = getattr(self, 'youtube_storage', {})
+            self.youtube_storage[youtube_id] = {
+                'url': url,
+                'title': video_title,
+                'user_id': user_id
+            }
+            
+            # Build quality selection message
+            message = f"🎬 **YouTube Video Detected**\n\n"
+            message += f"📺 Title: {video_title}\n\n"
+            message += "Choose download quality:\n"
+            
+            keyboard = []
+            
+            # Quality options
+            quality_options = [
+                ('🎥 Best Quality (1080p+)', 'best'),
+                ('📺 Good Quality (720p)', '720p'),
+                ('📱 Medium Quality (480p)', '480p'),
+                ('📲 Low Quality (360p)', '360p'),
+                ('🎵 Audio Only (MP3)', 'audio_only'),
+            ]
+            
+            for label, quality in quality_options:
+                keyboard.append([InlineKeyboardButton(label, callback_data=f"yt_quality_{youtube_id}_{quality}")])
+            
+            # Add cancel button
+            keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data=f"yt_cancel_{youtube_id}")])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error handling YouTube URL: {e}")
+            await update.message.reply_text(f"❌ Error: {str(e)}")
+    
+    async def handle_youtube_quality_selection(self, query, youtube_id: str, quality: str):
+        """Handle YouTube quality selection callback."""
+        if youtube_id not in self.youtube_storage:
+            await query.edit_message_text("❌ Video information expired")
+            return
+        
+        video_info = self.youtube_storage[youtube_id]
+        url = video_info['url']
+        
+        await query.edit_message_text(f"🎬 Downloading with quality: {quality}...\n\nThis may take a few minutes.")
+        
+        try:
+            # Download video
+            if quality == 'audio_only':
+                filepath = self.youtube_downloader.download_audio_only(url)
+            else:
+                quality_format = QUALITY_PRESETS.get(quality, 'best')
+                filepath = self.youtube_downloader.download_video(url, quality=quality_format)
+            
+            if not filepath:
+                await query.edit_message_text("❌ Video download failed")
+                return
+            
+            # Get file size
+            file_size_mb = filepath.stat().st_size / (1024 * 1024)
+            
+            logger.info(f"YouTube video downloaded: {filepath} ({file_size_mb:.2f}MB)")
+            
+            # Record download
+            self.downloader.record_download(video_info['user_id'])
+            
+            # Store file info for download options
+            file_id = hashlib.md5(str(datetime.now()).encode()).hexdigest()[:8]
+            self.file_storage[file_id] = {
+                'filepath': str(filepath),
+                'file_size_mb': file_size_mb,
+                'filename': filepath.name,
+                'is_youtube': True
+            }
+            
+            # Show download options
+            await self.show_download_options(query, file_id, filepath.name, file_size_mb)
+            
+            # Clean up YouTube storage
+            del self.youtube_storage[youtube_id]
+            
+        except Exception as e:
+            logger.error(f"Error in YouTube download: {e}")
+            await query.edit_message_text(f"❌ Error: {str(e)}")
+    
+    async def show_download_options(self, query, file_id: str, filename: str, file_size_mb: float):
+        """Show download options for a file."""
+        message = f"✅ Download complete!\n\n"
+        message += f"📁 File: {filename}\n"
+        message += f"📊 Size: {file_size_mb:.2f}MB\n\n"
+        message += "Choose download method:\n"
+        
+        keyboard = []
+        
+        # Option 1: Telegram download
+        if file_size_mb <= self.settings.max_file_size_mb:
+            message += "1. 📱 Download via Telegram (fast, direct)\n"
+            keyboard.append([InlineKeyboardButton("📱 Telegram Download", callback_data=f"telegram_{file_id}")])
+        elif file_size_mb <= 500:
+            message += "1. 📱 Download via Telegram (split into chunks)\n"
+            keyboard.append([InlineKeyboardButton("📱 Telegram (Chunks)", callback_data=f"telegram_chunks_{file_id}")])
+        
+        # Option 2: GitHub download (if configured)
+        if self.github_storage and self.github_storage.is_configured():
+            if file_size_mb <= 25:
+                message += "2. 🐙 Download via GitHub (works in restricted regions)\n"
+                keyboard.append([InlineKeyboardButton("🐙 GitHub Download", callback_data=f"github_{file_id}")])
+            else:
+                message += "2. 🐙 GitHub Download (file too large, max 25MB)\n"
+        
+        # Option 3: HTTP server (if enabled)
+        if self.settings.enable_http_server:
+            message += "3. 🌐 Download via HTTP Server (direct link)\n"
+            keyboard.append([InlineKeyboardButton("🌐 HTTP Download", callback_data=f"http_{file_id}")])
+        
+        message += "\n💡 GitHub works best in restricted regions"
+        
+        # Add cancel button
+        keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{file_id}")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(message, reply_markup=reply_markup)
     
     async def handle_file(self, update: Update, filepath: Path, file_size_mb: float):
         """Handle downloaded file by offering download options."""
@@ -621,6 +806,17 @@ Need help? Contact admin.
             await self.handle_cancel_callback(query, file_id)
         elif query.data == "github_too_large":
             await query.edit_message_text("❌ File is too large for GitHub (max 25MB)\nPlease use Telegram or HTTP download instead.")
+        elif query.data.startswith("yt_quality_"):
+            # Handle YouTube quality selection
+            parts = query.data.replace("yt_quality_", "").split("_")
+            youtube_id = parts[0]
+            quality = parts[1]
+            await self.handle_youtube_quality_selection(query, youtube_id, quality)
+        elif query.data.startswith("yt_cancel_"):
+            youtube_id = query.data.replace("yt_cancel_", "")
+            if youtube_id in self.youtube_storage:
+                del self.youtube_storage[youtube_id]
+            await query.edit_message_text("❌ YouTube download cancelled")
     
     async def handle_download_callback(self, query, link_id: str):
         """Handle download button callback."""

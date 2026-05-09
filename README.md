@@ -8,8 +8,12 @@ A Telegram bot that downloads files from URLs and delivers them to users, design
 - **Multiple Download Methods**:
   - 📱 **Telegram Download**: Direct file transfer via Telegram (files <50MB)
   - 📦 **Telegram Chunks**: Large files split into chunks (50-500MB)
-  - 🐙 **GitHub Storage**: Files stored in GitHub repo with raw URL access (works in Iran!)
+  - 🐙 **GitHub Storage**: Files stored in GitHub repo with raw URL access (works in restricted regions!)
   - 🌐 **HTTP Server**: Direct download links from VPS (for very large files)
+- **YouTube Video Downloads**: Download YouTube videos with quality selection
+  - 🎬 **Video Quality Options**: 1080p, 720p, 480p, 360p, or audio only
+  - 🎵 **Audio Extraction**: Download MP3 audio from YouTube videos
+  - 📺 **Playlist Support**: Download entire YouTube playlists
 - **Smart File Handling**: Automatic file size detection and method recommendation
 - **Network Resilience**: Works around restricted network environments
 - **VPS-based**: Runs on VPS in unrestricted region for full internet access
@@ -88,6 +92,38 @@ sudo systemctl start telegram-file-bot
    - You receive a raw GitHub URL
    - Download directly from GitHub (accessible in most regions)
    - No size limits for GitHub repo storage
+
+## YouTube Video Downloads
+
+The bot supports downloading YouTube videos with multiple quality options:
+
+### Supported YouTube URLs
+- Regular videos: `https://youtube.com/watch?v=xxxxx`
+- Shorts: `https://youtube.com/shorts/xxxxx`
+- Short links: `https://youtu.be/xxxxx`
+- Playlists: `https://youtube.com/playlist?list=xxxxx`
+
+### Quality Options
+- **Best Quality (1080p+)**: Highest available quality
+- **Good Quality (720p)**: Balanced quality and size
+- **Medium Quality (480p)**: Smaller file size
+- **Low Quality (360p)**: Fastest download
+- **Audio Only (MP3)**: Extract audio only
+
+### How to Download YouTube Videos
+1. Send a YouTube URL to the bot
+2. Bot detects it's a YouTube video
+3. Choose your preferred quality
+4. Bot downloads the video on VPS
+5. Choose download method (Telegram, GitHub, or HTTP)
+6. Receive the video via your chosen method
+
+### YouTube-Specific Features
+- **Audio Extraction**: Download just the audio as MP3
+- **Playlist Support**: Download entire playlists
+- **Quality Selection**: Choose from multiple quality options
+- **Format Conversion**: Automatic conversion to MP4/MP3
+- **Subtitle Download**: Automatic subtitle extraction (if available)
 
 ## Network Bypassing Methods
 
