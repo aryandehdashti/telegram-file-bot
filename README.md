@@ -4,14 +4,16 @@ A Telegram bot that downloads files from URLs and delivers them to users, design
 
 ## Features
 
-- **File Download**: Downloads files from any URL on the VPS
-- **Large File Support**: Handles files >50MB by splitting into chunks
-- **Alternative Download Methods**: 
-  - Direct HTTP download from VPS
-  - Telegram file upload
-  - GitHub storage fallback
+- **User Choice Interface**: Users can choose their preferred download method
+- **Multiple Download Methods**:
+  - 📱 **Telegram Download**: Direct file transfer via Telegram (files <50MB)
+  - 📦 **Telegram Chunks**: Large files split into chunks (50-500MB)
+  - 🐙 **GitHub Storage**: Files stored in GitHub repo with raw URL access (works in Iran!)
+  - 🌐 **HTTP Server**: Direct download links from VPS (for very large files)
+- **Smart File Handling**: Automatic file size detection and method recommendation
 - **Network Resilience**: Works around Iran's network restrictions
 - **VPS-based**: Runs on Finland VPS for unrestricted access
+- **GitHub Integration**: Leverages GitHub's accessible raw content delivery for Iran
 
 ## Architecture
 
@@ -54,6 +56,7 @@ MAX_FILE_SIZE_MB=50
 TEMP_DOWNLOAD_DIR=/tmp/telegram_bot_downloads
 ENABLE_HTTP_SERVER=True
 HTTP_SERVER_PORT=8080
+VPS_HOST=your-vps-ip-or-domain
 GITHUB_TOKEN=your_github_token_for_fallback
 GITHUB_REPO=your_username/your_repo
 ```
@@ -75,11 +78,16 @@ sudo systemctl start telegram-file-bot
 
 1. Send a download URL to the bot
 2. Bot downloads the file on the VPS
-3. Bot sends the file via Telegram (if <50MB)
-4. For larger files, bot provides:
-   - Split chunks sent via Telegram
-   - Direct download link from VPS
-   - GitHub storage link (if configured)
+3. **Choose your download method**:
+   - 📱 **Telegram Download**: Direct file transfer (fast, files <50MB)
+   - 📦 **Telegram Chunks**: Large files split into parts (50-500MB)
+   - 🐙 **GitHub Storage**: File stored in GitHub with raw URL (works in Iran!)
+   - 🌐 **HTTP Server**: Direct download link from VPS (for very large files)
+4. **GitHub Method** (Recommended for Iran):
+   - File is stored in your GitHub repository
+   - You receive a raw GitHub URL
+   - Download directly from GitHub (works in Iran)
+   - No size limits for GitHub repo storage
 
 ## Network Bypassing Methods
 

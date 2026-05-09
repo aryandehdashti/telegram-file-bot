@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     enable_http_server: bool = True
     http_server_port: int = 8080
     http_server_host: str = "0.0.0.0"
+    vps_host: str = "your-vps-ip"  # Public IP or domain of VPS
     download_link_expiry_hours: int = 24
     
     # GitHub Configuration
@@ -263,6 +264,9 @@ class TelegramBot:
         # Store download links with expiry
         self.download_links: Dict[str, Dict[str, Any]] = {}
         
+        # Store file information for download options
+        self.file_storage: Dict[str, Dict[str, Any]] = {}
+        
         # Initialize GitHub storage if available
         self.github_storage = None
         if GITHUB_AVAILABLE:
@@ -436,18 +440,53 @@ Need help? Contact admin.
         pass
     
     async def handle_file(self, update: Update, filepath: Path, file_size_mb: float):
-        """Handle downloaded file based on size."""
-        max_size = self.settings.max_file_size_mb
+        """Handle downloaded file by offering download options."""
+        # Store file info for later use
+        file_id = hashlib.md5(str(datetime.now()).encode()).hexdigest()[:8]
+        self.file_storage = getattr(self, 'file_storage', {})
+        self.file_storage[file_id] = {
+            'filepath': str(filepath),
+            'file_size_mb': file_size_mb,
+            'filename': filepath.name
+        }
         
-        if file_size_mb <= max_size:
-            # Send directly
-            await self.send_file_directly(update, filepath)
-        elif file_size_mb <= 500:  # 500MB threshold for splitting
-            # Split and send chunks
-            await self.send_file_chunks(update, filepath)
-        else:
-            # Provide alternative download method
-            await self.provide_download_link(update, filepath, file_size_mb)
+        # Build download options message
+        message = f"✅ File downloaded successfully!\n\n"
+        message += f"📁 File: {filepath.name}\n"
+        message += f"📊 Size: {file_size_mb:.2f}MB\n\n"
+        message += "Choose download method:\n"
+        
+        keyboard = []
+        
+        # Option 1: Telegram download
+        if file_size_mb <= self.settings.max_file_size_mb:
+            message += "1. 📱 Download via Telegram (fast, direct)\n"
+            keyboard.append([InlineKeyboardButton("📱 Telegram Download", callback_data=f"telegram_{file_id}")])
+        elif file_size_mb <= 500:
+            message += "1. 📱 Download via Telegram (split into chunks)\n"
+            keyboard.append([InlineKeyboardButton("📱 Telegram (Chunks)", callback_data=f"telegram_chunks_{file_id}")])
+        
+        # Option 2: GitHub download (if configured)
+        if self.github_storage and self.github_storage.is_configured():
+            if file_size_mb <= 25:  # GitHub limit
+                message += "2. 🐙 Download via GitHub (works in Iran)\n"
+                keyboard.append([InlineKeyboardButton("🐙 GitHub Download", callback_data=f"github_{file_id}")])
+            else:
+                message += "2. 🐙 GitHub Download (file too large, max 25MB)\n"
+                keyboard.append([InlineKeyboardButton("🐙 GitHub (Too Large)", callback_data="github_too_large")])
+        
+        # Option 3: HTTP server (if enabled)
+        if self.settings.enable_http_server:
+            message += "3. 🌐 Download via HTTP Server (direct link)\n"
+            keyboard.append([InlineKeyboardButton("🌐 HTTP Download", callback_data=f"http_{file_id}")])
+        
+        message += "\n💡 Recommended: GitHub works best in Iran"
+        
+        # Add cancel button
+        keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{file_id}")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(message, reply_markup=reply_markup)
     
     async def send_file_directly(self, update: Update, filepath: Path):
         """Send file directly via Telegram."""
@@ -565,15 +604,23 @@ Need help? Contact admin.
         query = update.callback_query
         await query.answer()
         
-        if query.data.startswith("download_"):
-            link_id = query.data.replace("download_", "")
-            await self.handle_download_callback(query, link_id)
+        if query.data.startswith("telegram_"):
+            file_id = query.data.replace("telegram_", "")
+            await self.handle_telegram_callback(query, file_id)
+        elif query.data.startswith("telegram_chunks_"):
+            file_id = query.data.replace("telegram_chunks_", "")
+            await self.handle_telegram_chunks_callback(query, file_id)
         elif query.data.startswith("github_"):
-            filename = query.data.replace("github_", "")
-            await self.handle_github_callback(query, filename)
+            file_id = query.data.replace("github_", "")
+            await self.handle_github_callback(query, file_id)
+        elif query.data.startswith("http_"):
+            file_id = query.data.replace("http_", "")
+            await self.handle_http_callback(query, file_id)
         elif query.data.startswith("cancel_"):
-            link_id = query.data.replace("cancel_", "")
-            await self.handle_cancel_callback(query, link_id)
+            file_id = query.data.replace("cancel_", "")
+            await self.handle_cancel_callback(query, file_id)
+        elif query.data == "github_too_large":
+            await query.edit_message_text("❌ File is too large for GitHub (max 25MB)\nPlease use Telegram or HTTP download instead.")
     
     async def handle_download_callback(self, query, link_id: str):
         """Handle download button callback."""
@@ -596,33 +643,152 @@ Need help? Contact admin.
             "For now, please contact admin for manual transfer."
         )
     
-    async def handle_cancel_callback(self, query, link_id: str):
+    async def handle_cancel_callback(self, query, file_id: str):
         """Handle cancel button callback."""
-        if link_id in self.download_links:
-            link_info = self.download_links[link_id]
-            # Clean up file
+        # Clean up from file_storage
+        if file_id in self.file_storage:
+            filepath = Path(self.file_storage[file_id]['filepath'])
+            self.downloader.cleanup_file(filepath)
+            del self.file_storage[file_id]
+        
+        # Clean up from download_links (for HTTP server)
+        if file_id in self.download_links:
+            link_info = self.download_links[file_id]
             Path(link_info['filepath']).unlink(missing_ok=True)
-            del self.download_links[link_id]
+            del self.download_links[file_id]
         
         await query.edit_message_text("❌ Download cancelled")
     
-    async def handle_github_callback(self, query, filename: str):
+    async def handle_telegram_callback(self, query, file_id: str):
+        """Handle Telegram download callback."""
+        if file_id not in self.file_storage:
+            await query.edit_message_text("❌ File not found or expired")
+            return
+        
+        file_info = self.file_storage[file_id]
+        filepath = Path(file_info['filepath'])
+        
+        if not filepath.exists():
+            await query.edit_message_text("❌ File not found")
+            del self.file_storage[file_id]
+            return
+        
+        await query.edit_message_text("📱 Sending file via Telegram...")
+        
+        # Create a mock update for the send_file_directly method
+        class MockUpdate:
+            def __init__(self, message):
+                self.message = message
+        
+        class MockMessage:
+            def __init__(self, chat_id):
+                self.chat_id = chat_id
+                self.reply_document = self._reply_document
+            
+            async def _reply_document(self, document, caption=None):
+                from telegram import Bot
+                bot = Bot(token=self.settings.telegram_bot_token)
+                await bot.send_document(
+                    chat_id=self.chat_id,
+                    document=document,
+                    caption=caption
+                )
+        
+        try:
+            with open(filepath, 'rb') as f:
+                from telegram import Bot
+                bot = Bot(token=self.settings.telegram_bot_token)
+                await bot.send_document(
+                    chat_id=query.message.chat_id,
+                    document=f,
+                    caption=f"📁 {filepath.name} ({file_info['file_size_mb']:.2f}MB)"
+                )
+            
+            await query.edit_message_text("✅ File sent via Telegram!")
+            self.downloader.cleanup_file(filepath)
+            del self.file_storage[file_id]
+            
+        except Exception as e:
+            logger.error(f"Error sending via Telegram: {e}")
+            await query.edit_message_text(f"❌ Failed to send via Telegram: {str(e)}")
+    
+    async def handle_telegram_chunks_callback(self, query, file_id: str):
+        """Handle Telegram chunks download callback."""
+        if file_id not in self.file_storage:
+            await query.edit_message_text("❌ File not found or expired")
+            return
+        
+        file_info = self.file_storage[file_id]
+        filepath = Path(file_info['filepath'])
+        
+        await query.edit_message_text("📦 Splitting file and sending via Telegram...")
+        
+        # Create a mock update for the send_file_chunks method
+        try:
+            chunk_size = self.settings.chunk_size_mb
+            chunks = self.downloader.split_file(filepath, chunk_size)
+            
+            from telegram import Bot
+            bot = Bot(token=self.settings.telegram_bot_token)
+            
+            await query.edit_message_text(
+                f"📦 Sending {len(chunks)} chunks via Telegram..."
+            )
+            
+            for i, chunk in enumerate(chunks, 1):
+                try:
+                    with open(chunk, 'rb') as f:
+                        await bot.send_document(
+                            chat_id=query.message.chat_id,
+                            document=f,
+                            caption=f"📦 Part {i}/{len(chunks)} - {chunk.name}"
+                        )
+                    logger.info(f"Sent chunk {i}/{len(chunks)}")
+                    await asyncio.sleep(1)
+                    
+                except Exception as e:
+                    logger.error(f"Error sending chunk {i}: {e}")
+                    await bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"❌ Error sending chunk {i}: {str(e)}"
+                    )
+                
+                self.downloader.cleanup_file(chunk)
+            
+            await bot.send_message(
+                chat_id=query.message.chat_id,
+                text=f"✅ All {len(chunks)} chunks sent!\n\nCombine them using:\n`cat {filepath.stem}_part*{filepath.suffix} > {filepath.name}`",
+                parse_mode='Markdown'
+            )
+            
+            self.downloader.cleanup_file(filepath)
+            del self.file_storage[file_id]
+            
+        except Exception as e:
+            logger.error(f"Error in chunk splitting: {e}")
+            await query.edit_message_text(f"❌ Error: {str(e)}")
+    
+    async def handle_github_callback(self, query, file_id: str):
         """Handle GitHub storage button callback."""
         if not self.github_storage:
             await query.edit_message_text("❌ GitHub storage not configured")
             return
         
+        if file_id not in self.file_storage:
+            await query.edit_message_text("❌ File not found or expired")
+            return
+        
+        file_info = self.file_storage[file_id]
+        filepath = Path(file_info['filepath'])
+        
+        if not filepath.exists():
+            await query.edit_message_text("❌ File not found")
+            del self.file_storage[file_id]
+            return
+        
+        await query.edit_message_text("🐙 Storing file in GitHub...")
+        
         try:
-            # Find the file in temp directory
-            temp_dir = Path(self.settings.temp_download_dir)
-            filepath = temp_dir / filename
-            
-            if not filepath.exists():
-                await query.edit_message_text("❌ File not found")
-                return
-            
-            await query.edit_message_text("🐙 Storing file in GitHub...")
-            
             # Store file in GitHub
             raw_url = await self.github_storage.store_file(filepath)
             
@@ -630,16 +796,54 @@ Need help? Contact admin.
                 await query.edit_message_text(
                     f"✅ File stored in GitHub!\n\n"
                     f"📥 Download link: {raw_url}\n\n"
-                    f"This link should work in Iran as it uses GitHub's raw content delivery."
+                    f"💡 This link works in Iran via GitHub's raw content delivery.\n"
+                    f"📦 File size: {file_info['file_size_mb']:.2f}MB"
                 )
                 # Clean up local file
                 self.downloader.cleanup_file(filepath)
+                del self.file_storage[file_id]
             else:
                 await query.edit_message_text("❌ Failed to store file in GitHub")
                 
         except Exception as e:
             logger.error(f"Error in GitHub callback: {e}")
             await query.edit_message_text(f"❌ Error: {str(e)}")
+    
+    async def handle_http_callback(self, query, file_id: str):
+        """Handle HTTP server download callback."""
+        if not self.settings.enable_http_server:
+            await query.edit_message_text("❌ HTTP server is disabled")
+            return
+        
+        if file_id not in self.file_storage:
+            await query.edit_message_text("❌ File not found or expired")
+            return
+        
+        file_info = self.file_storage[file_id]
+        
+        # Generate download link
+        link_id = file_id  # Use same ID for simplicity
+        
+        # Store link info
+        self.download_links[link_id] = {
+            'filepath': file_info['filepath'],
+            'expiry': datetime.now() + timedelta(hours=self.settings.download_link_expiry_hours),
+            'user_id': query.from_user.id
+        }
+        
+        # Get VPS IP or domain from settings
+        vps_host = self.settings.vps_host
+        vps_port = self.settings.http_server_port
+        
+        download_url = f"http://{vps_host}:{vps_port}/download/{link_id}"
+        
+        await query.edit_message_text(
+            f"🌐 HTTP download link generated!\n\n"
+            f"📥 Download URL: {download_url}\n\n"
+            f"⏰ Expires in: {self.settings.download_link_expiry_hours} hours\n"
+            f"📊 File size: {file_info['file_size_mb']:.2f}MB\n\n"
+            f"💡 Use this link with your proxy/VPN to download from Iran."
+        )
     
     def run(self):
         """Run the bot."""
