@@ -10,7 +10,7 @@ import logging
 import aiohttp
 import aiofiles
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
@@ -255,70 +255,134 @@ class GitHubStorage:
         except Exception as e:
             logger.error(f"Error listing files from GitHub: {e}")
             return []
-
-# Utility functions for file splitting for GitHub
-async def split_file_for_github(filepath: Path, max_size_mb: int = 20) -> list[Path]:
-    """
-    Split a large file into smaller parts suitable for GitHub storage.
     
-    Args:
-        filepath: Path to the file to split
-        max_size_mb: Maximum size per part in MB
+    async def split_file_for_github(self, filepath: Path, max_size_mb: int = 20) -> list[Path]:
+        """
+        Split a large file into smaller parts suitable for GitHub storage.
         
-    Returns:
-        List of paths to the split files
-    """
-    chunk_size_bytes = max_size_mb * 1024 * 1024
-    chunks = []
+        Args:
+            filepath: Path to the file to split
+            max_size_mb: Maximum size per part in MB (default 20MB to stay under 25MB limit)
+        
+        Returns:
+            List of paths to the split files
+        """
+        chunk_size_bytes = max_size_mb * 1024 * 1024
+        chunks = []
+        
+        try:
+            async with aiofiles.open(filepath, 'rb') as f:
+                chunk_num = 0
+                while True:
+                    chunk_data = await f.read(chunk_size_bytes)
+                    if not chunk_data:
+                        break
+                    
+                    chunk_path = filepath.parent / f"{filepath.stem}_part{chunk_num + 1}{filepath.suffix}"
+                    async with aiofiles.open(chunk_path, 'wb') as chunk_file:
+                        await chunk_file.write(chunk_data)
+                    
+                    chunks.append(chunk_path)
+                    chunk_num += 1
+            
+            logger.info(f"Split {filepath} into {len(chunks)} parts for GitHub")
+            return chunks
+            
+        except Exception as e:
+            logger.error(f"Error splitting file for GitHub: {e}")
+            # Clean up partial chunks
+            for chunk in chunks:
+                chunk.unlink(missing_ok=True)
+            return []
     
-    try:
-        async with aiofiles.open(filepath, 'rb') as f:
-            chunk_num = 0
-            while True:
-                chunk_data = await f.read(chunk_size_bytes)
-                if not chunk_data:
-                    break
-                
-                chunk_path = filepath.parent / f"{filepath.stem}_part{chunk_num + 1}{filepath.suffix}"
-                async with aiofiles.open(chunk_path, 'wb') as chunk_file:
-                    await chunk_file.write(chunk_data)
-                
-                chunks.append(chunk_path)
-                chunk_num += 1
+    async def store_split_files(self, chunks: list[Path], commit_message: str = None) -> list:
+        """
+        Store multiple file chunks to GitHub.
         
-        logger.info(f"Split {filepath} into {len(chunks)} parts for GitHub")
-        return chunks
+        Args:
+            chunks: List of file paths to store
+            commit_message: Custom commit message
+            
+        Returns:
+            List of raw URLs for the stored chunks
+        """
+        raw_urls = []
         
-    except Exception as e:
-        logger.error(f"Error splitting file for GitHub: {e}")
-        # Clean up partial chunks
         for chunk in chunks:
-            chunk.unlink(missing_ok=True)
-        return []
-
-async def combine_github_parts(output_path: Path, parts: list[Path]) -> bool:
-    """
-    Combine split file parts back into original file.
+            raw_url = await self.store_file(chunk, commit_message)
+            if raw_url:
+                raw_urls.append(raw_url)
+            else:
+                logger.error(f"Failed to store chunk: {chunk}")
+        
+        return raw_urls
     
-    Args:
-        output_path: Path for the combined output file
-        parts: List of paths to the part files
+    def generate_recombination_instructions(self, filename: str, num_chunks: int) -> str:
+        """
+        Generate instructions for recombining split files.
         
-    Returns:
-        True if successful, False otherwise
-    """
-    try:
-        async with aiofiles.open(output_path, 'wb') as outfile:
-            for part in sorted(parts):
-                async with aiofiles.open(part, 'rb') as infile:
-                    await outfile.write(await infile.read())
+        Args:
+            filename: Original filename
+            num_chunks: Number of chunks
+            
+        Returns:
+            Recombination instructions
+        """
+        stem = Path(filename).stem
+        suffix = Path(filename).suffix
         
-        logger.info(f"Combined {len(parts)} parts into {output_path}")
-        return True
+        instructions = f"""
+📦 File Splitting Instructions
+
+Your file has been split into {num_chunks} parts and stored in GitHub.
+
+🔗 Download Links:
+"""
         
-    except Exception as e:
-        logger.error(f"Error combining file parts: {e}")
-        return False
+        # This would be filled in when chunks are uploaded
+        for i in range(num_chunks):
+            instructions += f"Part {i+1}: [Link will be provided]\n"
+        
+        instructions += f"""
+📝 How to Recombine:
+
+Linux/Mac:
+cat {stem}_part*{suffix} > {filename}
+
+Windows:
+copy /b {stem}_part1{suffix}+{stem}_part2{suffix}+{stem}_part3{suffix} {filename}
+
+PowerShell:
+Get-Content {stem}_part*{suffix} | Set-Content {filename}
+
+💡 Note: Make sure to download all parts before recombining.
+"""
+        
+        return instructions
+    
+    async def combine_parts(self, output_path: Path, parts: list[Path]) -> bool:
+        """
+        Combine split file parts back into original file.
+        
+        Args:
+            output_path: Path for the combined output file
+            parts: List of paths to the part files
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            async with aiofiles.open(output_path, 'wb') as outfile:
+                for part in sorted(parts):
+                    async with aiofiles.open(part, 'rb') as infile:
+                        await outfile.write(await infile.read())
+            
+            logger.info(f"Combined {len(parts)} parts into {output_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error combining file parts: {e}")
+            return False
 
 # Example usage and testing
 async def main():

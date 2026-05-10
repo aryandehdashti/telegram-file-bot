@@ -682,18 +682,19 @@ Need help? Contact admin.
         # Option 2: GitHub download (if configured)
         if self.github_storage and self.github_storage.is_configured():
             if file_size_mb <= 25:  # GitHub limit
-                message += "2. 🐙 Download via GitHub (works in Iran)\n"
+                message += "2. 🐙 Download via GitHub (works in restricted regions)\n"
                 keyboard.append([InlineKeyboardButton("🐙 GitHub Download", callback_data=f"github_{file_id}")])
             else:
-                message += "2. 🐙 GitHub Download (file too large, max 25MB)\n"
-                keyboard.append([InlineKeyboardButton("🐙 GitHub (Too Large)", callback_data="github_too_large")])
+                # Large files can be stored via splitting
+                message += "2. 🐙 Download via GitHub (file will be split into chunks)\n"
+                keyboard.append([InlineKeyboardButton("🐙 GitHub (Split)", callback_data=f"github_{file_id}")])
         
         # Option 3: HTTP server (if enabled)
         if self.settings.enable_http_server:
             message += "3. 🌐 Download via HTTP Server (direct link)\n"
             keyboard.append([InlineKeyboardButton("🌐 HTTP Download", callback_data=f"http_{file_id}")])
         
-        message += "\n💡 Recommended: GitHub works best in Iran"
+        message += "\n💡 GitHub works best in restricted regions"
         
         # Add cancel button
         keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{file_id}")])
@@ -788,7 +789,7 @@ Need help? Contact admin.
             
             # Option 2: GitHub Storage (if configured and file size allows)
             if self.github_storage and file_size_mb <= 25:  # GitHub limit
-                message += f"2. 🐙 Store in GitHub (works in Iran)\n"
+                message += f"2. 🐙 Store in GitHub (works in restricted regions)\n"
                 keyboard.append([InlineKeyboardButton("🐙 Store in GitHub", callback_data=f"github_{filepath.name}")])
             
             # Option 3: Admin transfer
@@ -1025,14 +1026,73 @@ Need help? Contact admin.
         await query.edit_message_text("🐙 Storing file in GitHub...")
         
         try:
-            # Store file in GitHub
-            raw_url = await self.github_storage.store_file(filepath)
+            file_size_mb = file_info['file_size_mb']
+            
+            # Check if file needs splitting (GitHub limit is 25MB, use 20MB to be safe)
+            if file_size_mb > 20:
+                await query.edit_message_text(
+                    f"📦 File is too large ({file_size_mb:.2f}MB) for direct GitHub storage.\n"
+                    f"Splitting into chunks under 20MB each..."
+                )
+                
+                # Split the file
+                chunks = await self.github_storage.split_file_for_github(filepath, max_size_mb=20)
+                
+                if not chunks or len(chunks) == 0:
+                    await query.edit_message_text("❌ Failed to split file for GitHub storage")
+                    return
+                
+                await query.edit_message_text(
+                    f"📦 Split into {len(chunks)} chunks. Uploading to GitHub..."
+                )
+                
+                # Upload chunks to GitHub
+                raw_urls = await self.github_storage.store_split_files(chunks)
+                
+                if raw_urls and len(raw_urls) == len(chunks):
+                    # Generate recombination instructions
+                    instructions = self.github_storage.generate_recombination_instructions(
+                        file_info['filename'], len(chunks)
+                    )
+                    
+                    # Add the actual download links to instructions
+                    instructions_with_links = instructions
+                    for i, url in enumerate(raw_urls):
+                        instructions_with_links = instructions_with_links.replace(
+                            f"Part {i+1}: [Link will be provided]",
+                            f"Part {i+1}: {url}"
+                        )
+                    
+                    await query.edit_message_text(
+                        f"✅ File split and stored in GitHub!\n\n"
+                        f"📦 Split into {len(chunks)} chunks\n"
+                        f"📥 Download all parts from GitHub\n\n"
+                        f"📝 Recombination instructions:\n"
+                        f"```\n{instructions_with_links}```\n\n"
+                        f"💡 Download all parts before recombining."
+                    )
+                    
+                    # Clean up chunks and original file
+                    for chunk in chunks:
+                        self.downloader.cleanup_file(chunk)
+                    self.downloader.cleanup_file(filepath)
+                    del self.file_storage[file_id]
+                else:
+                    await query.edit_message_text(f"❌ Failed to upload all chunks ({len(raw_urls)}/{len(chunks)} uploaded)")
+                    # Clean up chunks
+                    for chunk in chunks:
+                        self.downloader.cleanup_file(chunk)
+                    self.downloader.cleanup_file(filepath)
+                    del self.file_storage[file_id]
+            else:
+                # Store file directly
+                raw_url = await self.github_storage.store_file(filepath)
             
             if raw_url:
                 await query.edit_message_text(
                     f"✅ File stored in GitHub!\n\n"
                     f"📥 Download link: {raw_url}\n\n"
-                    f"💡 This link works in Iran via GitHub's raw content delivery.\n"
+                    f"💡 This link works in restricted regions via GitHub's raw content delivery.\n"
                     f"📦 File size: {file_info['file_size_mb']:.2f}MB"
                 )
                 # Clean up local file
