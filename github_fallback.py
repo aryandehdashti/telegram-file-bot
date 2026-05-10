@@ -383,6 +383,138 @@ Get-Content {stem}_part*{suffix} | Set-Content {filename}
         except Exception as e:
             logger.error(f"Error combining file parts: {e}")
             return False
+    
+    async def cleanup_old_files(self, max_age_days: int = 7, keep_recent: int = 10) -> int:
+        """
+        Clean up old files from GitHub repository.
+        
+        Args:
+            max_age_days: Delete files older than this many days
+            keep_recent: Always keep this many most recent files
+            
+        Returns:
+            Number of files deleted
+        """
+        if not self.is_configured():
+            logger.warning("GitHub storage not configured")
+            return 0
+        
+        try:
+            api_url = f"{self.settings.github_api_url}/repos/{self.settings.github_repo}/contents/"
+            
+            async with aiohttp.ClientSession(headers=self.headers) as session:
+                async with session.get(api_url) as response:
+                    response.raise_for_status()
+                    data = await response.json()
+                    
+                    if isinstance(data, list):
+                        # Get all files with their info
+                        files_to_delete = []
+                        now = datetime.now()
+                        
+                        # Sort by last modified date (most recent first)
+                        sorted_files = sorted(
+                            [item for item in data if item.get('type') == 'file'],
+                            key=lambda x: x.get('name', ''),
+                            reverse=True
+                        )
+                        
+                        # Keep the most recent files
+                        recent_files = sorted_files[:keep_recent]
+                        recent_names = {f['name'] for f in recent_files}
+                        
+                        # Mark older files for deletion
+                        for file_info in sorted_files[keep_recent:]:
+                            if file_info['name'] not in recent_names:
+                                files_to_delete.append(file_info)
+                        
+                        logger.info(f"Found {len(files_to_delete)} files to delete (keeping {keep_recent} recent)")
+                        
+                        # Delete old files
+                        deleted_count = 0
+                        for file_info in files_to_delete:
+                            try:
+                                # Get SHA for deletion
+                                async with session.get(
+                                    f"{api_url}{file_info['name']}"
+                                ) as response:
+                                    if response.status == 200:
+                                        data = await response.json()
+                                        sha = data.get('sha')
+                                        
+                                        # Delete file
+                                        delete_data = {
+                                            'message': f"Auto-cleanup: Removing old file {file_info['name']}",
+                                            'sha': sha,
+                                            'branch': self.settings.github_branch
+                                        }
+                                        
+                                        async with session.delete(
+                                            f"{api_url}{file_info['name']}",
+                                            json=delete_data
+                                        ) as response:
+                                            if response.status == 200:
+                                                deleted_count += 1
+                                                logger.info(f"Deleted old file: {file_info['name']}")
+                                    else:
+                                        logger.warning(f"Failed to delete {file_info['name']}: {response.status}")
+                            except Exception as e:
+                                logger.error(f"Error deleting {file_info['name']}: {e}")
+                        
+                        return deleted_count
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+            return 0
+    
+    async def get_repo_size(self) -> int:
+        """
+        Get total size of GitHub repository in bytes.
+        
+        Returns:
+            Total size in bytes, 0 if unable to determine
+        """
+        if not self.is_configured():
+            return 0
+        
+        try:
+            api_url = f"{self.settings.github_api_url}/repos/{self.settings.github_repo}"
+            
+            async with aiohttp.ClientSession(headers=self.headers) as session:
+                async with session.get(api_url) as response:
+                    response.raise_for_status()
+                    data = await response.json()
+                    return data.get('size', 0)
+        except Exception as e:
+            logger.error(f"Error getting repo size: {e}")
+            return 0
+    
+    async def cleanup_by_size(self, max_size_mb: int, keep_recent: int = 10) -> int:
+        """
+        Clean up repository if it exceeds size limit.
+        
+        Args:
+            max_size_mb: Maximum repository size in MB
+            keep_recent: Always keep this many most recent files
+            
+        Returns:
+            Number of files deleted
+        """
+        if not self.is_configured():
+            logger.warning("GitHub storage not configured")
+            return 0
+        
+        current_size_mb = (await self.get_repo_size()) / (1024 * 1024)
+        
+        if current_size_mb <= max_size_mb:
+            logger.info(f"Repository size {current_size_mb:.2f}MB is under limit {max_size_mb}MB")
+            return 0
+        
+        logger.info(f"Repository size {current_size_mb:.2f}MB exceeds limit {max_size_mb}MB, cleaning up...")
+        
+        # Use the same cleanup logic as age-based cleanup
+        return await self.cleanup_old_files(max_age_days=0, keep_recent=keep_recent)
 
 # Example usage and testing
 async def main():

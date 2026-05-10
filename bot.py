@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_file: Optional[str] = None
     
+    # Cleanup Configuration
+    enable_auto_cleanup: bool = True
+    cleanup_age_days: int = 7  # Delete files older than this many days
+    cleanup_max_repo_size_mb: int = 500  # Cleanup if repo exceeds this size
+    cleanup_keep_recent: int = 10  # Always keep this many recent files
+    
     model_config = {"extra": "ignore", "env_file": ".env", "case_sensitive": False}
 
 # Initialize settings
@@ -312,6 +318,7 @@ class TelegramBot:
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("status", self.status_command))
         self.application.add_handler(CommandHandler("admin", self.admin_command))
+        self.application.add_handler(CommandHandler("cleanup", self.cleanup_command))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_url))
         self.application.add_handler(CallbackQueryHandler(self.handle_callback))
     
@@ -412,6 +419,63 @@ Need help? Contact admin.
             admin_info += f"• User {user_id}: {len(timestamps)} downloads\n"
         
         await update.message.reply_text(admin_info, parse_mode='Markdown')
+    
+    async def cleanup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /cleanup command (admin only)."""
+        if self.settings.admin_user_id and update.effective_user.id != self.settings.admin_user_id:
+            await update.message.reply_text("⚠️ Admin command only")
+            return
+        
+        if not self.github_storage or not self.github_storage.is_configured():
+            await update.message.reply_text("❌ GitHub storage not configured")
+            return
+        
+        # Parse arguments
+        args = context.args if context.args else []
+        cleanup_type = "auto"  # default
+        force = False
+        
+        for arg in args:
+            if arg in ["auto", "age", "size"]:
+                cleanup_type = arg
+            elif arg == "--force":
+                force = True
+        
+        await update.message.reply_text("🧹 Starting GitHub cleanup...")
+        
+        try:
+            if cleanup_type == "auto":
+                # Run both age and size cleanup
+                deleted_age = await self.github_storage.cleanup_old_files(
+                    max_age_days=self.settings.cleanup_age_days,
+                    keep_recent=self.settings.cleanup_keep_recent
+                )
+                deleted_size = await self.github_storage.cleanup_by_size(
+                    max_size_mb=self.settings.cleanup_max_repo_size_mb,
+                    keep_recent=self.settings.cleanup_keep_recent
+                )
+                total_deleted = deleted_age + deleted_size
+                message = f"✅ Cleanup complete!\n\nDeleted {total_deleted} files:\n• {deleted_age} by age (>{self.settings.cleanup_age_days} days)\n• {deleted_size} by size (>{self.settings.cleanup_max_repo_size_mb}MB)"
+            
+            elif cleanup_type == "age":
+                deleted = await self.github_storage.cleanup_old_files(
+                    max_age_days=self.settings.cleanup_age_days,
+                    keep_recent=self.settings.cleanup_keep_recent
+                )
+                message = f"✅ Age-based cleanup complete!\n\nDeleted {deleted} files older than {self.settings.cleanup_age_days} days"
+            
+            elif cleanup_type == "size":
+                deleted = await self.github_storage.cleanup_by_size(
+                    max_size_mb=self.settings.cleanup_max_repo_size_mb,
+                    keep_recent=self.settings.cleanup_keep_recent
+                )
+                message = f"✅ Size-based cleanup complete!\n\nDeleted {deleted} files to keep repo under {self.settings.cleanup_max_repo_size_mb}MB"
+            
+            await update.message.reply_text(message)
+            
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+            await update.message.reply_text(f"❌ Cleanup failed: {str(e)}")
     
     async def handle_url(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle URL messages."""

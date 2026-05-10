@@ -125,6 +125,70 @@ The bot supports downloading YouTube videos with multiple quality options:
 - **Format Conversion**: Automatic conversion to MP4/MP3
 - **Subtitle Download**: Automatic subtitle extraction (if available)
 
+## GitHub Storage Cleanup
+
+The bot includes automatic cleanup for GitHub storage to prevent your repository from filling up over time.
+
+### Cleanup Methods
+
+1. **Age-based Cleanup**: Automatically deletes files older than a specified number of days
+2. **Size-based Cleanup**: Deletes files if repository exceeds a specified size limit
+3. **Keep Recent**: Always keeps a specified number of most recent files
+
+### Configuration
+
+Add these settings to your `.env` file:
+
+```bash
+# GitHub Cleanup Configuration
+ENABLE_AUTO_CLEANUP=True
+CLEANUP_AGE_DAYS=7
+CLEANUP_MAX_REPO_SIZE_MB=500
+CLEANUP_KEEP_RECENT=10
+```
+
+### Manual Cleanup (Telegram)
+
+As admin, you can trigger cleanup manually from Telegram:
+
+- `/cleanup` - Run automatic cleanup (both age and size based)
+- `/cleanup age` - Clean only by age
+- `/cleanup size` - Clean only by size
+
+### Automatic Cleanup (Cron Job)
+
+Set up automatic cleanup via cron job:
+
+```bash
+crontab -e
+```
+
+Add:
+```
+# Clean GitHub storage daily at 2 AM
+0 2 * * * cd /path/to/telegram-file-bot && source venv/bin/activate && python cleanup_github.py >> /var/log/github_cleanup.log 2>&1
+```
+
+### Cleanup Script Options
+
+The `cleanup_github.py` script supports custom parameters:
+
+```bash
+# Custom cleanup parameters
+python cleanup_github.py --age 3 --size 1024 --keep 20
+
+# Dry run (show what would be deleted without actually deleting)
+python cleanup_github.py --dry-run
+```
+
+### Safety Features
+
+- Always keeps the most recent files (configurable, default: 10)
+- Age-based cleanup only affects files older than specified days
+- Size-based cleanup only triggers when repository exceeds limit
+- Dry-run mode available for testing
+- Detailed logging of all cleanup actions
+
 ## Network Bypassing Methods
 
 ### Current Setup

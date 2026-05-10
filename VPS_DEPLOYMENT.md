@@ -204,6 +204,8 @@ free -h
 
 ## Automatic Cleanup
 
+### Local Download Cleanup
+
 Add cron job to clean old downloads:
 
 ```bash
@@ -214,6 +216,58 @@ Add:
 ```
 # Clean downloads older than 24 hours
 0 0 * * * find /tmp/telegram_bot_downloads -type f -mtime +1 -delete
+```
+
+### GitHub Storage Cleanup
+
+Add cron job to automatically clean up GitHub storage:
+
+```bash
+crontab -e
+```
+
+Add:
+```
+# Clean GitHub storage daily at 2 AM (keeps files older than 7 days, keeps repo under 500MB, keeps 10 recent files)
+0 2 * * * cd /root/telegram-file-bot && source venv/bin/activate && python cleanup_github.py >> /var/log/github_cleanup.log 2>&1
+```
+
+You can customize the cleanup schedule and parameters:
+
+- **Schedule**: Change `0 2 * * *` to your preferred time (format: minute hour day month weekday)
+- **Age limit**: Add `--age N` to change days threshold (default: 7)
+- **Size limit**: Add `--size N` to change MB threshold (default: 500)
+- **Keep recent**: Add `--keep N` to change number of recent files to keep (default: 10)
+
+Examples:
+```
+# Clean every 6 hours, delete files older than 3 days, keep repo under 1GB
+0 */6 * * * cd /root/telegram-file-bot && source venv/bin/activate && python cleanup_github.py --age 3 --size 1024 >> /var/log/github_cleanup.log 2>&1
+
+# Clean weekly, delete files older than 30 days, keep 20 recent files
+0 0 * * 0 cd /root/telegram-file-bot && source venv/bin/activate && python cleanup_github.py --age 30 --keep 20 >> /var/log/github_cleanup.log 2>&1
+```
+
+### Manual Cleanup
+
+You can also trigger cleanup manually from Telegram as admin:
+
+- `/cleanup` - Run automatic cleanup (both age and size based)
+- `/cleanup age` - Clean only by age
+- `/cleanup size` - Clean only by size
+
+Or run the cleanup script manually from SSH:
+
+```bash
+cd /root/telegram-file-bot
+source venv/bin/activate
+python cleanup_github.py
+```
+
+To see what would be deleted without actually deleting:
+
+```bash
+python cleanup_github.py --dry-run
 ```
 
 ## Security Notes
