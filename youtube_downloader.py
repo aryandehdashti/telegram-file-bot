@@ -25,6 +25,15 @@ class YouTubeDownloader:
     
     def check_yt_dlp_available(self) -> bool:
         """Check if yt-dlp is installed and working."""
+        # Try to check as Python module first (for virtual environment)
+        try:
+            import yt_dlp
+            logger.info("yt-dlp Python module is available")
+            return True
+        except ImportError:
+            logger.info("yt-dlp Python module not found, checking system-wide")
+        
+        # Fall back to checking system-wide yt-dlp
         try:
             result = subprocess.run(
                 ['yt-dlp', '--version'],
@@ -33,10 +42,10 @@ class YouTubeDownloader:
                 timeout=5
             )
             if result.returncode == 0:
-                logger.info(f"yt-dlp is available: {result.stdout.strip()}")
+                logger.info(f"System-wide yt-dlp is available: {result.stdout.strip()}")
                 return True
             else:
-                logger.error(f"yt-dlp check failed: {result.stderr}")
+                logger.error(f"System-wide yt-dlp check failed: {result.stderr}")
                 return False
         except FileNotFoundError:
             logger.error("yt-dlp not found in system PATH")
@@ -167,6 +176,16 @@ class YouTubeDownloader:
             Path to downloaded file or None if failed
         """
         try:
+            # Try using yt-dlp as Python module first (for virtual environment)
+            try:
+                import yt_dlp
+                logger.info("Using yt-dlp Python module")
+                return self._download_with_python_module(url, quality, format, output_template, progress_callback)
+            except ImportError:
+                logger.info("yt-dlp Python module not available, using subprocess")
+                # Fall back to subprocess method
+                pass
+            
             # Generate output filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_template = f"youtube_{timestamp}_{output_template}"
@@ -233,6 +252,59 @@ class YouTubeDownloader:
         except Exception as e:
             logger.error(f"Error downloading video: {e}")
             return None
+    
+    def _download_with_python_module(
+        self,
+        url: str,
+        quality: str,
+        format: str,
+        output_template: str,
+        progress_callback=None
+    ) -> Optional[Path]:
+        """Download video using yt-dlp Python module."""
+        try:
+            import yt_dlp
+            
+            # Generate output filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_template = f"youtube_{timestamp}_{output_template}"
+            output_path = self.temp_download_dir / output_template
+            
+            # Configure yt-dlp options
+            ydl_opts = {
+                'format': quality,
+                'merge_output_format': format,
+                'outtmpl': str(output_path),
+                'noplaylist': True,
+                'quiet': False,
+                'no_warnings': True,
+                'progress_hooks': [self._progress_hook] if progress_callback else [],
+            }
+            
+            logger.info(f"Downloading YouTube video with Python module: {url}")
+            
+            # Download video
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            
+            # Find the downloaded file
+            downloaded_files = list(self.temp_download_dir.glob(f"youtube_{timestamp}*"))
+            if downloaded_files:
+                logger.info(f"Video downloaded with Python module: {downloaded_files[0]}")
+                return downloaded_files[0]
+            else:
+                logger.error("Download completed but file not found")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error downloading with Python module: {e}")
+            return None
+    
+    def _progress_hook(self, d):
+        """Progress hook for yt-dlp Python module."""
+        if d['status'] == 'downloading':
+            percent = d.get('downloaded_bytes', 0) / d.get('total_bytes', 1) * 100
+            logger.info(f"Download progress: {percent:.1f}%")
     
     def download_audio_only(
         self,
