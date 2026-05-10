@@ -70,6 +70,27 @@ class YouTubeDownloader:
     
     def get_video_info(self, url: str) -> Optional[Dict[str, Any]]:
         """Get video information without downloading."""
+        # Try using yt-dlp as Python module first (for virtual environment)
+        try:
+            import yt_dlp
+            logger.info("Using yt-dlp Python module to get video info")
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                return info
+        except ImportError:
+            logger.info("yt-dlp Python module not available, using subprocess")
+            # Fall back to subprocess method
+            pass
+        except Exception as e:
+            logger.error(f"Error getting video info with Python module: {e}")
+            # Fall back to subprocess method
+            pass
+        
+        # Subsystem method as fallback
         # Check if yt-dlp is available
         try:
             subprocess.run(['yt-dlp', '--version'], capture_output=True, check=True, timeout=5)
@@ -108,6 +129,41 @@ class YouTubeDownloader:
     
     def get_available_formats(self, url: str) -> List[Dict[str, Any]]:
         """Get available video formats."""
+        # Try using yt-dlp as Python module first (for virtual environment)
+        try:
+            import yt_dlp
+            logger.info("Using yt-dlp Python module to get formats")
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'listformats': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if info and 'formats' in info:
+                    formats = []
+                    for fmt in info['formats']:
+                        formats.append({
+                            'id': fmt.get('format_id'),
+                            'ext': fmt.get('ext'),
+                            'resolution': fmt.get('resolution', 'audio only'),
+                            'filesize': fmt.get('filesize', 0),
+                            'fps': fmt.get('fps', 0),
+                            'vcodec': fmt.get('vcodec', 'none'),
+                            'acodec': fmt.get('acodec', 'none'),
+                        })
+                    return formats
+                return []
+        except ImportError:
+            logger.info("yt-dlp Python module not available, using subprocess")
+            # Fall back to subprocess method
+            pass
+        except Exception as e:
+            logger.error(f"Error getting formats with Python module: {e}")
+            # Fall back to subprocess method
+            pass
+        
+        # Subsystem method as fallback
         try:
             cmd = [
                 'yt-dlp',
@@ -368,6 +424,30 @@ class YouTubeDownloader:
     
     def get_video_title(self, url: str) -> Optional[str]:
         """Get video title without downloading."""
+        # Try using yt-dlp as Python module first (for virtual environment)
+        try:
+            import yt_dlp
+            logger.info("Using yt-dlp Python module to get title")
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if info and 'title' in info:
+                    return info['title']
+                return None
+        except ImportError:
+            logger.info("yt-dlp Python module not available, using subprocess")
+            # Fall back to subprocess method
+            pass
+        except Exception as e:
+            logger.error(f"Error getting title with Python module: {e}")
+            # Fall back to subprocess method
+            pass
+        
+        # Subsystem method as fallback
         try:
             cmd = [
                 'yt-dlp',

@@ -1142,12 +1142,13 @@ Need help? Contact admin.
                     self.downloader.cleanup_file(filepath)
                     del self.file_storage[file_id]
                 else:
-                    await query.edit_message_text(f"❌ Failed to upload all chunks ({len(raw_urls)}/{len(chunks)} uploaded)")
+                    await query.edit_message_text(f"❌ Failed to upload all chunks ({len(raw_urls) if raw_urls else 0}/{len(chunks)} uploaded)")
                     # Clean up chunks
                     for chunk in chunks:
                         self.downloader.cleanup_file(chunk)
                     self.downloader.cleanup_file(filepath)
                     del self.file_storage[file_id]
+                return  # Exit after handling split case
             else:
                 # Store file directly
                 raw_url = await self.github_storage.store_file(filepath)
