@@ -1092,15 +1092,15 @@ Need help? Contact admin.
         try:
             file_size_mb = file_info['file_size_mb']
             
-            # Check if file needs splitting (GitHub limit is 25MB, use 20MB to be safe)
-            if file_size_mb > 20:
+            # Check if file needs splitting (GitHub limit is 25MB, use 15MB to account for base64 encoding overhead)
+            if file_size_mb > 15:
                 await query.edit_message_text(
                     f"📦 File is too large ({file_size_mb:.2f}MB) for direct GitHub storage.\n"
-                    f"Splitting into chunks under 20MB each..."
+                    f"Splitting into chunks under 15MB each..."
                 )
-                
+
                 # Split the file
-                chunks = await self.github_storage.split_file_for_github(filepath, max_size_mb=20)
+                chunks = await self.github_storage.split_file_for_github(filepath, max_size_mb=15)
                 
                 if not chunks or len(chunks) == 0:
                     await query.edit_message_text("❌ Failed to split file for GitHub storage")

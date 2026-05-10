@@ -28,11 +28,14 @@ class YouTubeDownloader:
         # Try to check as Python module first (for virtual environment)
         try:
             import yt_dlp
-            logger.info("yt-dlp Python module is available")
+            version = yt_dlp.version.__version__
+            logger.info(f"yt-dlp Python module is available: version {version}")
             return True
         except ImportError:
             logger.info("yt-dlp Python module not found, checking system-wide")
-        
+        except Exception as e:
+            logger.error(f"Error checking yt-dlp Python module: {e}")
+
         # Fall back to checking system-wide yt-dlp
         try:
             result = subprocess.run(
@@ -424,6 +427,13 @@ class YouTubeDownloader:
     
     def get_video_title(self, url: str) -> Optional[str]:
         """Get video title without downloading."""
+        logger.info(f"Attempting to get video title for: {url}")
+
+        # Check if yt-dlp is available at all
+        if not self.available:
+            logger.error("yt-dlp is not available")
+            return None
+
         # Try using yt-dlp as Python module first (for virtual environment)
         try:
             import yt_dlp
@@ -436,7 +446,9 @@ class YouTubeDownloader:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 if info and 'title' in info:
+                    logger.info(f"Successfully got title: {info['title']}")
                     return info['title']
+                logger.error("No title in video info")
                 return None
         except ImportError:
             logger.info("yt-dlp Python module not available, using subprocess")
@@ -446,7 +458,7 @@ class YouTubeDownloader:
             logger.error(f"Error getting title with Python module: {e}")
             # Fall back to subprocess method
             pass
-        
+
         # Subsystem method as fallback
         try:
             cmd = [
@@ -456,20 +468,24 @@ class YouTubeDownloader:
                 '--no-warnings',
                 url
             ]
-            
+
+            logger.info(f"Running subprocess command: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=30
             )
-            
+
+            logger.info(f"Subprocess return code: {result.returncode}")
             if result.returncode == 0:
-                return result.stdout.strip()
+                title = result.stdout.strip()
+                logger.info(f"Successfully got title from subprocess: {title}")
+                return title
             else:
-                logger.error(f"Error getting title: {result.stderr}")
+                logger.error(f"Error getting title from subprocess: {result.stderr}")
                 return None
-                
+
         except subprocess.TimeoutExpired:
             logger.error("Timeout getting title")
             return None

@@ -115,14 +115,24 @@ class GitHubStorage:
             # Upload to GitHub
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 async with session.put(api_url, json=data) as response:
-                    response.raise_for_status()
+                    response_text = await response.text()
+                    logger.info(f"GitHub API response status: {response.status}")
+                    logger.info(f"GitHub API response: {response_text[:500]}")
+
+                    if response.status != 200 and response.status != 201:
+                        logger.error(f"GitHub API error: {response.status} - {response_text}")
+                        return None
+
                     result = await response.json()
-                    
+
                     if result.get('content'):
                         raw_url = result['content'].get('raw_url')
                         logger.info(f"Stored {filepath.name} in GitHub: {raw_url}")
                         return raw_url
-            
+                    else:
+                        logger.error(f"No content in GitHub response: {result}")
+                        return None
+
             return None
             
         except Exception as e:
@@ -298,23 +308,29 @@ class GitHubStorage:
     async def store_split_files(self, chunks: list[Path], commit_message: str = None) -> list:
         """
         Store multiple file chunks to GitHub.
-        
+
         Args:
             chunks: List of file paths to store
             commit_message: Custom commit message
-            
+
         Returns:
             List of raw URLs for the stored chunks
         """
         raw_urls = []
-        
-        for chunk in chunks:
+
+        for i, chunk in enumerate(chunks):
+            logger.info(f"Uploading chunk {i+1}/{len(chunks)}: {chunk.name}")
+            chunk_size_mb = chunk.stat().st_size / (1024 * 1024)
+            logger.info(f"Chunk size: {chunk_size_mb:.2f}MB")
+
             raw_url = await self.store_file(chunk, commit_message)
             if raw_url:
                 raw_urls.append(raw_url)
+                logger.info(f"Successfully uploaded chunk {i+1}/{len(chunks)}")
             else:
-                logger.error(f"Failed to store chunk: {chunk}")
-        
+                logger.error(f"Failed to store chunk {i+1}/{len(chunks)}: {chunk}")
+
+        logger.info(f"Uploaded {len(raw_urls)}/{len(chunks)} chunks successfully")
         return raw_urls
     
     def generate_recombination_instructions(self, filename: str, num_chunks: int) -> str:
