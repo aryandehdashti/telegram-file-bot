@@ -6,4 +6,4 @@ aiofiles==23.2.1
 tqdm==4.66.1
 pydantic==2.5.3
 pydantic-settings==2.1.0
-yt-dlp==2023.11.16
+yt-dlp>=2024.1.1

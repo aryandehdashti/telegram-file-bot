@@ -80,6 +80,12 @@ class YouTubeDownloader:
             ydl_opts = {
                 'quiet': True,
                 'no_warnings': True,
+                'nocheckcertificate': True,  # Bypass SSL certificate issues
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': 'android',  # Use Android client to bypass bot detection
+                    }
+                }
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -92,7 +98,7 @@ class YouTubeDownloader:
             logger.error(f"Error getting video info with Python module: {e}")
             # Fall back to subprocess method
             pass
-        
+
         # Subsystem method as fallback
         # Check if yt-dlp is available
         try:
@@ -100,29 +106,31 @@ class YouTubeDownloader:
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.error(f"yt-dlp not available or not working: {e}")
             return None
-        
+
         try:
             cmd = [
                 'yt-dlp',
                 '--dump-json',
                 '--no-playlist',
                 '--no-warnings',
+                '--no-check-certificates',  # Bypass SSL certificate issues
+                '--extractor-args', 'youtube:player_client=android',  # Use Android client
                 url
             ]
-            
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=30
             )
-            
+
             if result.returncode == 0:
                 return json.loads(result.stdout)
             else:
                 logger.error(f"Error getting video info: {result.stderr}")
                 return None
-                
+
         except subprocess.TimeoutExpired:
             logger.error("Timeout getting video info")
             return None
@@ -249,7 +257,7 @@ class YouTubeDownloader:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_template = f"youtube_{timestamp}_{output_template}"
             output_path = self.temp_download_dir / output_template
-            
+
             # Build yt-dlp command
             cmd = [
                 'yt-dlp',
@@ -259,6 +267,8 @@ class YouTubeDownloader:
                 '--no-playlist',
                 '--no-warnings',
                 '--newline',
+                '--no-check-certificates',  # Bypass SSL certificate issues
+                '--extractor-args', 'youtube:player_client=android',  # Use Android client
                 url
             ]
             
@@ -338,6 +348,12 @@ class YouTubeDownloader:
                 'quiet': False,
                 'no_warnings': True,
                 'progress_hooks': [self._progress_hook] if progress_callback else [],
+                'nocheckcertificate': True,  # Bypass SSL certificate issues
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': 'android',  # Use Android client to bypass bot detection
+                    }
+                }
             }
             
             logger.info(f"Downloading YouTube video with Python module: {url}")
@@ -442,6 +458,12 @@ class YouTubeDownloader:
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': True,
+                'nocheckcertificate': True,  # Bypass SSL certificate issues
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': 'android',  # Use Android client to bypass bot detection
+                    }
+                }
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -466,6 +488,8 @@ class YouTubeDownloader:
                 '--get-title',
                 '--no-playlist',
                 '--no-warnings',
+                '--no-check-certificates',  # Bypass SSL certificate issues
+                '--extractor-args', 'youtube:player_client=android',  # Use Android client
                 url
             ]
 
