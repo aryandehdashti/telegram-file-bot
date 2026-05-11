@@ -74,7 +74,11 @@ class Settings(BaseSettings):
     github_token: Optional[str] = None
     github_repo: Optional[str] = None
     github_branch: str = "main"
-    
+
+    # YouTube Configuration
+    youtube_cookies_file: Optional[str] = None  # Path to cookies.txt file
+    youtube_cookies_from_browser: Optional[str] = None  # Browser to extract cookies from (chrome, firefox, etc)
+
     # Rate Limiting
     enable_rate_limiting: bool = False
     max_downloads_per_hour: int = 10
@@ -301,7 +305,11 @@ class TelegramBot:
         self.youtube_available = False
         if YOUTUBE_AVAILABLE:
             try:
-                self.youtube_downloader = YouTubeDownloader(settings.temp_download_dir)
+                self.youtube_downloader = YouTubeDownloader(
+                    settings.temp_download_dir,
+                    cookies_file=settings.youtube_cookies_file,
+                    cookies_from_browser=settings.youtube_cookies_from_browser
+                )
                 if self.youtube_downloader.available:
                     self.youtube_available = True
                     logger.info("YouTube downloader initialized successfully")

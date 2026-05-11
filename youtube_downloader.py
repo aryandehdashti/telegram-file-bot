@@ -17,10 +17,14 @@ logger = logging.getLogger(__name__)
 
 class YouTubeDownloader:
     """Handles YouTube video downloads using yt-dlp."""
-    
-    def __init__(self, temp_download_dir: str = "/tmp/telegram_bot_downloads"):
+
+    def __init__(self, temp_download_dir: str = "/tmp/telegram_bot_downloads",
+                 cookies_file: Optional[str] = None,
+                 cookies_from_browser: Optional[str] = None):
         self.temp_download_dir = Path(temp_download_dir)
         self.temp_download_dir.mkdir(parents=True, exist_ok=True)
+        self.cookies_file = cookies_file
+        self.cookies_from_browser = cookies_from_browser
         self.available = self.check_yt_dlp_available()
     
     def check_yt_dlp_available(self) -> bool:
@@ -87,6 +91,15 @@ class YouTubeDownloader:
                     }
                 }
             }
+
+            # Add cookie support
+            if self.cookies_file:
+                ydl_opts['cookiefile'] = self.cookies_file
+                logger.info(f"Using cookies from file: {self.cookies_file}")
+            elif self.cookies_from_browser:
+                ydl_opts['cookiesfrombrowser'] = self.cookies_from_browser
+                logger.info(f"Using cookies from browser: {self.cookies_from_browser}")
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 return info
@@ -115,8 +128,17 @@ class YouTubeDownloader:
                 '--no-warnings',
                 '--no-check-certificates',  # Bypass SSL certificate issues
                 '--extractor-args', 'youtube:player_client=android',  # Use Android client
-                url
             ]
+
+            # Add cookie support
+            if self.cookies_file:
+                cmd.extend(['--cookies', self.cookies_file])
+                logger.info(f"Using cookies from file: {self.cookies_file}")
+            elif self.cookies_from_browser:
+                cmd.extend(['--cookies-from-browser', self.cookies_from_browser])
+                logger.info(f"Using cookies from browser: {self.cookies_from_browser}")
+
+            cmd.append(url)
 
             result = subprocess.run(
                 cmd,
@@ -269,8 +291,17 @@ class YouTubeDownloader:
                 '--newline',
                 '--no-check-certificates',  # Bypass SSL certificate issues
                 '--extractor-args', 'youtube:player_client=android',  # Use Android client
-                url
             ]
+
+            # Add cookie support
+            if self.cookies_file:
+                cmd.extend(['--cookies', self.cookies_file])
+                logger.info(f"Using cookies from file: {self.cookies_file}")
+            elif self.cookies_from_browser:
+                cmd.extend(['--cookies-from-browser', self.cookies_from_browser])
+                logger.info(f"Using cookies from browser: {self.cookies_from_browser}")
+
+            cmd.append(url)
             
             # Add progress hook if callback provided
             if progress_callback:
@@ -355,6 +386,14 @@ class YouTubeDownloader:
                     }
                 }
             }
+
+            # Add cookie support
+            if self.cookies_file:
+                ydl_opts['cookiefile'] = self.cookies_file
+                logger.info(f"Using cookies from file: {self.cookies_file}")
+            elif self.cookies_from_browser:
+                ydl_opts['cookiesfrombrowser'] = self.cookies_from_browser
+                logger.info(f"Using cookies from browser: {self.cookies_from_browser}")
             
             logger.info(f"Downloading YouTube video with Python module: {url}")
             
@@ -465,6 +504,15 @@ class YouTubeDownloader:
                     }
                 }
             }
+
+            # Add cookie support
+            if self.cookies_file:
+                ydl_opts['cookiefile'] = self.cookies_file
+                logger.info(f"Using cookies from file: {self.cookies_file}")
+            elif self.cookies_from_browser:
+                ydl_opts['cookiesfrombrowser'] = self.cookies_from_browser
+                logger.info(f"Using cookies from browser: {self.cookies_from_browser}")
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 if info and 'title' in info:
@@ -490,8 +538,17 @@ class YouTubeDownloader:
                 '--no-warnings',
                 '--no-check-certificates',  # Bypass SSL certificate issues
                 '--extractor-args', 'youtube:player_client=android',  # Use Android client
-                url
             ]
+
+            # Add cookie support
+            if self.cookies_file:
+                cmd.extend(['--cookies', self.cookies_file])
+                logger.info(f"Using cookies from file: {self.cookies_file}")
+            elif self.cookies_from_browser:
+                cmd.extend(['--cookies-from-browser', self.cookies_from_browser])
+                logger.info(f"Using cookies from browser: {self.cookies_from_browser}")
+
+            cmd.append(url)
 
             logger.info(f"Running subprocess command: {' '.join(cmd)}")
             result = subprocess.run(
