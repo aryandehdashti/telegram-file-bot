@@ -126,9 +126,27 @@ class GitHubStorage:
                     result = await response.json()
 
                     if result.get('content'):
-                        raw_url = result['content'].get('raw_url')
-                        logger.info(f"Stored {filepath.name} in GitHub: {raw_url}")
-                        return raw_url
+                        content = result['content']
+
+                        # Try multiple ways to get the raw URL
+                        raw_url = content.get('raw_url')
+                        if not raw_url:
+                            # Try download_url
+                            raw_url = content.get('download_url')
+
+                        if not raw_url:
+                            # Construct raw URL manually
+                            # Format: https://raw.githubusercontent.com/{username}/{repo}/{branch}/{path}
+                            raw_url = f"https://raw.githubusercontent.com/{self.settings.github_repo}/{self.settings.github_branch}/{filepath.name}"
+                            logger.info(f"Constructed raw URL: {raw_url}")
+
+                        if raw_url:
+                            logger.info(f"Stored {filepath.name} in GitHub: {raw_url}")
+                            return raw_url
+                        else:
+                            logger.error(f"Could not extract raw URL from response. Available keys: {list(content.keys())}")
+                            logger.error(f"Full content object: {content}")
+                            return None
                     else:
                         logger.error(f"No content in GitHub response: {result}")
                         return None
